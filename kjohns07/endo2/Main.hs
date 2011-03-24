@@ -138,13 +138,9 @@ moveDir (x,y) d | d=='N' = (x, (y + 599) `mod` 600)
 		| d=='E' = ((x +   1) `mod` 600, y)
 
 {- Adds a color to the current bucket color
- - In state, we store the current color(an average of all the colors), and the
- - number of colors we have averaged so far.  To add a new color, we multiply
- - each color value by the number we have averaged, add the new color channel,
- - then divide by the new number we are averaging by.
-
- - Basically this keeps a rolling/current average of the contents of the bucket,
- - without storing each value in the bucket.
+ - We store the total value for each color component, and add each new component
+ - when we add a color.  We also keep track of how many colors we have added, so
+ - that we can get the final color value when necessary by simply dividing
  -}
 addColor :: State->Color-> State
 addColor (p, d, m, c, t, b) color = (p, d, m, (updateColor c color), t, b)
@@ -155,29 +151,30 @@ addColor (p, d, m, c, t, b) color = (p, d, m, (updateColor c color), t, b)
 addTrans :: State->Transparency->State
 addTrans (p, d, m, c, t, b) trans = (p, d, m, c, updateTrans t trans, b)
 
--- These two functions do the actual rolling average(see addColors description)
+-- These two functions just update the total value and length
 updateColor:: (Color,Int)->Color->(Color,Int)
 updateColor (x,0) c = (c,1)
-updateColor ((r,g,b),l) (ar,ag,ab) = ((nr, ng, nb),l+1)
-    where
-	  nr = (r*l+ar) `div` l
-	  ng = (g*l+ag) `div` l
-	  nb = (b*l+ab) `div` l
+updateColor ((r,g,b),l) (ar,ag,ab) = ((r+ar,g+ag,b+ab),l+1)
 
 updateTrans :: (Transparency,Int)->Transparency->(Transparency,Int)
 updateTrans (_,0) t  = (t,1)
-updateTrans (t,l) nt = ((t*l + nt) `div` l, l+1)
+updateTrans (t,l) nt = ((t+nt), l+1)
 
--- Formats a Color/Transparency as "(r,g,b,a)" for printing
-strColor :: Color->Transparency->String
-strColor (r,g,b) a = "color " ++ show (r,g,b,a)
+-- Formats a Color/Transparency as "color (r,g,b,a)" for printing
+strColor :: (Color,Int)->(Transparency,Int)->String
+-- First 3 handle cases where one of the lengths is zero(i.e. no division)
+strColor ((r,g,b),0) (a,0) = "color " ++ show (r,g,b,a)
+strColor ((r,g,b),0) (a,lt) = "color " ++ show (r,g,b,div a lt)
+strColor ((r,g,b),lc) (a,0) = "color " ++ show (div r lc, div g lc, div b lc, a)
+-- Divide the component by the length to get the average
+strColor ((r,g,b),lc) (a,lt) = "color " ++ show (div r lc,div g lc,div b lc,div a lt)
 
 {- Uses the current known state, generate a proper "line" command with the
  - correct coordinates and color value
  -}
 makeLine :: State->String
-makeLine (p1,_,p2,(c,_),(t,_),_) = "line from" ++ (show p1) ++ " to " ++ (show p2) ++ "; " ++ (strColor c t)
+makeLine (p1,_,p2,c,t,_) = "line from" ++ (show p1) ++ " to " ++ (show p2) ++ "; " ++ (strColor c t)
 
 -- Same basic idea of makeLine; uses the current state to print a fill command
 makeFill :: State->String
-makeFill (p,_,_,(c,_),(t,_),_) = "fill at " ++ (show p) ++ "; " ++ (strColor c t)
+makeFill (p,_,_,c,t,_) = "fill at " ++ (show p) ++ "; " ++ (strColor c t)
