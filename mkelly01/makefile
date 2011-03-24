@@ -3,7 +3,7 @@ MAIN=Main.hs
 RNA=EndoRNA.hs
 TESTOUT=rna.txt
 
-all: clean compile test
+all: compile test
 	pause
 
 compile:
