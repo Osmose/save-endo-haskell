@@ -4,11 +4,10 @@ RNA=EndoRNA.hs
 TESTOUT=rna.txt
 
 all: compile test
-	pause
 
 compile:
-	ghc -Wall -o endo1 $(RNA)
-	ghc -Wall -o endo2 $(MAIN)
+	ghc -o endo1 $(RNA)
+	ghc -o endo2 $(MAIN)
 	
 test:
 	time ./endo1 < $(TESTFILE) > rna.inter 
