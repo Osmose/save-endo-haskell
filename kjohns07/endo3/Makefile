@@ -4,7 +4,7 @@ ENDO1=Endo1.hs
 ENDO3=Main.hs
 
 # Build the components
-all: 
+all:
 	ghc --make -o endo1 $(ENDO1)
 	ghc --make -o endo3 $(ENDO3)
 
@@ -13,7 +13,8 @@ test: all
 	time ./endo1 < $(TESTFILE) > rna.inter
 	time ./endo3 < rna.inter > rna.final
 	rm rna.inter
-	head -n3 rna.final
+	convert TXT:- -alpha On +adjoin PNG32:image_alphaOn.png < rna.final
+	convert TXT:- -alpha Off +adjoin PNG32:image_alphaOff.png < rna.final
 
 clean:
-	rm -f *.o *.hi *.out *.inter *.final endo1 endo3
+	rm -f *.o *.hi *.out *.inter *.final endo1 endo3 image_alphaOn.png image_alphaOff.png *~

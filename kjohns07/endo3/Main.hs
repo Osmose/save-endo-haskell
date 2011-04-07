@@ -7,7 +7,8 @@
 
 module Main where
 
-import Data.Array
+import Text.Printf
+import Data.Array.Diff
 
 main :: IO()
 main = interact(unlines . flip parseCommands initialState . lines)
@@ -21,7 +22,7 @@ type Component = Int
 type Color = (Component, Component, Component)
 type Transparency = Int
 type Pixel = (Color,Transparency)
-type Bitmap = Array (Int,Int) Pixel
+type Bitmap = DiffArray (Int,Int) Pixel
 type Bitmaps = [Bitmap]
 type Dir = Char		-- Direction Type(N,S,E,W)
 
@@ -65,11 +66,9 @@ initialState = ((0,0), 'E', (0,0), ((0,0,0),0), (opaque,0), transBitmap:[])
     * Do nothing(ignore the command)
 -}
 parseCommands :: [String]->State->[String]
-parseCommands [] s = []
-parseCommands (x:xs) s = if null a
-			    then parseCommands xs b
-			    else a:parseCommands xs b
-    where (a,b) = command (x,s)
+parseCommands [] s = dumpImage s
+parseCommands (x:xs) s = parseCommands xs b
+    where (_,b) = command (x,s)
 
 {- Performs the actual transformation from a commmand and a state, to a new
  - output string, and a new state
@@ -242,3 +241,15 @@ clipBitmap :: Bitmap->Bitmap->Bitmap
 clipBitmap b1 b2 = newB
   where
     newB = b1 -- TODO: make this actually compose the two images
+
+{- Converts the first bitmap into the a string in the imagemagick format -}
+dumpImage :: State->[String]
+dumpImage (p,d,m,c,t,b:bs) = "# ImageMagick pixel enumeration: 600,600,255,rgba":(bitmapToString b)
+
+bitmapToString :: Bitmap->[String]
+bitmapToString bitmap = [
+        (printf "%d,%d: (%d, %d, %d, %d)" x y r g b a) |
+            x<-[0..599],
+            y<-[0..599],
+            let ((r,g,b),a) = bitmap!(x,y)
+        ]
