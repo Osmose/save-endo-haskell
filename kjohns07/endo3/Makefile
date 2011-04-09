@@ -5,8 +5,8 @@ ENDO3=Main.hs
 
 # Build the components
 all:
-	ghc --make -o endo1 $(ENDO1)
-	ghc --make -o endo3 $(ENDO3)
+	ghc --make -O2 -o endo1 $(ENDO1)
+	ghc --make -O2 -o endo3 $(ENDO3)
 
 # Test them
 test: all

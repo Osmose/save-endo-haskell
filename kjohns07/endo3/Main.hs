@@ -9,6 +9,7 @@ module Main where
 
 import Text.Printf
 import Data.Array.Diff
+import Debug.Trace
 
 main :: IO()
 main = interact(unlines . flip parseCommands initialState . lines)
@@ -23,7 +24,7 @@ type Color = (Component, Component, Component)
 type Transparency = Int
 type Pixel = (Color,Transparency)
 type Bitmap = DiffArray (Int,Int) Pixel
-type Bitmaps = [Bitmap]
+type Bitmaps = ([Bitmap],Int) -- List of bitmaps, + the number in use
 type Dir = Char		-- Direction Type(N,S,E,W)
 
 type State = (Pos, Dir, Pos, (Color,Int), (Transparency,Int), Bitmaps)
@@ -50,9 +51,9 @@ transparent = 0
 opaque      = 255
 
 -- Define the initial state of the program(location (0,0) facing East)
-initialState = ((0,0), 'E', (0,0), ((0,0,0),0), (opaque,0), transBitmap:[])
+initialState = ((0,0), 'E', (0,0), ((0,0,0),0), (opaque,0), (bitmaps,1))
   where
-    transBitmap = array ((0,0),(599,599)) [((x,y),(black,transparent)) | x<-[0..599],y<-[0..599]]
+    bitmaps = [array ((0,0),(599,599)) [((x,y),(black,transparent)) | x<-[0..599],y<-[0..599]] | a<-[0..9]]
 
 
 ---------------------------------
@@ -99,8 +100,10 @@ command ("line", s)  = (makeLine s, drawLine s)
 command ("fill", s)  = (makeFill s, doFill s)
 
 command ("add", s)    = ("", addBitmap s)
-command ("compose",s) = ("", compose s)
-command ("clip",s)    = ("", clip s)
+command ("compose",s) = ("", s)
+command ("clip",s)    = ("", s)
+--command ("compose",s) = trace "compose" ("", compose s) -- compose s
+--command ("clip",s)    = trace "clip" ("", clip s) -- clip s
 
 -- A special command to reset the bucket
 command ("empty", s) = ("", resetBucket s)
@@ -188,10 +191,11 @@ getTrans (a,lt) = div a lt
   Adds a new bitmap to the list of bitmaps if there is room
 -}
 addBitmap :: State->State
-addBitmap (p, d, m, c, t, b) | (length b) >=10 = (p, d, m, c, t, b)
-                             | otherwise = (p, d, m, c, t, transBitmap:b)
-    where
-        transBitmap = array ((0,0),(599,599)) [((x,y),(black,transparent)) | x<-[0..599],y<-[0..599]]
+addBitmap (p, d, m, c, t, (b,bc)) | bc >=10 = (p, d, m, c, t, (b,bc))
+                                  | otherwise = (p, d, m, c, t, ((clearArray (last b)):(init b), bc+1))
+
+clearArray :: Bitmap -> Bitmap
+clearArray b = b // [((x,y),(black,transparent)) | x<-[0..599],y<-[0..599]]
 
 {- Uses the current known state, generate a proper "line" command with the
  - correct coordinates and color value
@@ -205,17 +209,33 @@ makeFill (p,_,_,c,t,_) = "fill at " ++ (show p) ++ "; " ++ (strColor c t)
 
 {- Draws a line from p1 to p2 -}
 drawLine :: State->State
-drawLine (p1,d,p2,c,t,(b:bs)) = (p1,d,p2,c,t,(renderLine b (getColor c,getTrans t) p1 p2):bs)
+drawLine (p1,d,p2,c,t,((b:bs),bc)) = (p1,d,p2,c,t,((renderLine b (getColor c,getTrans t) p1 p2):bs,bc))
 
 {- Draw the actual line onto the bitmap -}
 renderLine :: Bitmap->Pixel->Pos->Pos->Bitmap
 renderLine b p (x1,y1) (x2,y2) = newB
   where
-     newB = b -- TODO: make this actually draw a line
+     newB = b//(findLineCoords (dx,dy) (x,y) d d p [((x2,y2),p)])
+       where
+        dx = x2-x1
+        dy = y2-y1
+        d  = max (abs dx) (abs dy)
+        c = if dx*dy <= 0
+            then 1
+            else 0
+        z  = f ((d-c) `div` 2)
+            where f = floor . fromIntegral
+        x  = x1 * d + z
+        y  = y1 * d + z
+
+findLineCoords :: Pos->Pos->Int->Int->Pixel->[(Pos,Pixel)]->[(Pos,Pixel)]
+findLineCoords dxy     xy    d 0  p l = l
+findLineCoords (dx,dy) (x,y) d d2 p l = findLineCoords (dx,dy) ((x+dx),(y+dy)) d (d2-1) p ((((f (x `div` d)),(f (y `div` d))),p):l)
+    where f = floor . fromIntegral
 
 
 doFill :: State->State
-doFill (p1, d, m, c, t, (b:bs)) = (p1, d, m, c, t, (floodFill b (getColor c,getTrans t) p1):bs)
+doFill (p1, d, m, c, t, ((b:bs),bc)) = (p1, d, m, c, t, ((floodFill b (getColor c,getTrans t) p1):bs, bc))
 
 floodFill :: Bitmap->Pixel->Pos->Bitmap
 floodFill b p (x,y) = newB
@@ -223,28 +243,50 @@ floodFill b p (x,y) = newB
     newB = b -- TODO: make this actually do a flood fill
 
 compose :: State->State
-compose (p, d, m, c, t, b1:b2:bs) = (p, d, m, c, t, (composeBitmap b1 b2):bs)
+compose (p, d, m, c, t, ((b1:b2:bs),bc)) = (p, d, m, c, t, (((composeBitmap b1 b2):bs) ++ (clearArray b2):[], bc-1))
 compose (p, d, m, c, t, b) = (p, d, m, c, t, b)
 
 {- Takes in two bitmaps, and composes one onto another, returning the resulting bitmap -}
 composeBitmap :: Bitmap->Bitmap->Bitmap
 composeBitmap b1 b2 = newB
   where
-    newB = b1 -- TODO: make this actually compose the two images
+    newB = b1 // [(p, composeHelper (b1!p) (b2!p)) | x<-[0..599],y<-[0..599],let p=(x,y)]
+
+composeHelper:: Pixel->Pixel->Pixel
+composeHelper ((r0,g0,b0),a0) ((r1,g1,b1),a1) =
+    (
+      (
+        r0 + (r1 * (255 - a0) `div` 255),
+        g0 + (g1 * (255 - a0) `div` 255),
+        b0 + (b1 * (255 - a0) `div` 255)
+      ),
+      a0 + (a1 * (255 - a0) `div` 255)
+    )
 
 clip :: State->State
-clip (p, d, m, c, t, b1:b2:bs) = (p, d, m, c, t, (clipBitmap b1 b2):bs)
+clip (p, d, m, c, t, ((b1:b2:bs),bc)) = (p, d, m, c, t, (((clipBitmap b1 b2):bs) ++ b2:[], bc-1))
 clip (p, d, m, c, t, b) = (p, d, m, c, t, b)
 
 {- Takes in two bitmaps, and clips one onto another, returning the resulting bitmap -}
 clipBitmap :: Bitmap->Bitmap->Bitmap
 clipBitmap b1 b2 = newB
   where
-    newB = b1 -- TODO: make this actually compose the two images
+    newB = b1 // [(p, clipHelper (b1!p) (b2!p)) | x<-[0..599],y<-[0..599],let p=(x,y)]
+
+clipHelper :: Pixel->Pixel->Pixel
+clipHelper ((r0,g0,b0),a0) ((r1,g1,b1),a1) =
+    (
+      (
+        r1 * (a0 `div` 255),
+        g1 * (a0 `div` 255),
+        b1 * (a0 `div` 255)
+      ),
+      a1 * (a0 `div` 255)
+    )
 
 {- Converts the first bitmap into the a string in the imagemagick format -}
 dumpImage :: State->[String]
-dumpImage (p,d,m,c,t,b:bs) = "# ImageMagick pixel enumeration: 600,600,255,rgba":(bitmapToString b)
+dumpImage (p,d,m,c,t,(b:bs,bc)) = "# ImageMagick pixel enumeration: 600,600,255,rgba":(bitmapToString b)
 
 bitmapToString :: Bitmap->[String]
 bitmapToString bitmap = [
