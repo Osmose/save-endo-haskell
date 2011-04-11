@@ -1,15 +1,20 @@
-
+{-# LANGUAGE BangPatterns #-}
 {-
  - Author: Keith Johnson, kjohns07@my.fit.edu
  - Course: CSE5400, Spring 2011
  - Project: endo3
 -}
 
+
+
 module Main where
 
 import Text.Printf
 import Data.Array.Diff
+import Data.Int
+import Data.Bits
 import Debug.Trace
+
 
 main :: IO()
 main = interact(unlines . flip parseCommands initialState . lines)
@@ -23,7 +28,7 @@ type Component = Int
 type Color = (Component, Component, Component)
 type Transparency = Int
 type Pixel = (Color,Transparency)
-type Bitmap = DiffArray (Int,Int) Pixel
+type Bitmap = DiffUArray (Int,Int) Int32 -- bitwise store rgba(8bits each)
 type Bitmaps = ([Bitmap],Int) -- List of bitmaps, + the number in use
 type Dir = Char		-- Direction Type(N,S,E,W)
 
@@ -53,8 +58,24 @@ opaque      = 255
 -- Define the initial state of the program(location (0,0) facing East)
 initialState = ((0,0), 'E', (0,0), ((0,0,0),0), (opaque,0), (bitmaps,1))
   where
-    bitmaps = [array ((0,0),(599,599)) [((x,y),(black,transparent)) | x<-[0..599],y<-[0..599]] | a<-[0..9]]
+    bitmaps = [array ((0,0),(599,599)) [((x,y), packColor (black,transparent)) | x<-[0..599],y<-[0..599]] | a<-[0..9]]
 
+
+packColor :: Pixel->Int32
+packColor ((r,g,b),a) = fromIntegral (rb .|. gb .|. bb .|. ab)
+  where
+    rb = (r .&. 255) `shiftL` 24
+    gb = (g .&. 255) `shiftL` 16
+    bb = (b .&. 255) `shiftL` 8
+    ab = (a .&. 255)
+
+unpackColor :: Int32->Pixel
+unpackColor i = ((r,g,b),a)
+  where
+    r = fromIntegral ((i `shiftR` 24) .&. 255)
+    g = fromIntegral ((i `shiftR` 16) .&. 255)
+    b = fromIntegral ((i `shiftR` 8) .&. 255)
+    a = fromIntegral (i .&. 255)
 
 ---------------------------------
 --    Function definitions     --
@@ -100,10 +121,10 @@ command ("line", s)  = (makeLine s, drawLine s)
 command ("fill", s)  = (makeFill s, doFill s)
 
 command ("add", s)    = ("", addBitmap s)
-command ("compose",s) = ("", s)
-command ("clip",s)    = ("", s)
---command ("compose",s) = trace "compose" ("", compose s) -- compose s
---command ("clip",s)    = trace "clip" ("", clip s) -- clip s
+--command ("compose",s) = ("", s)
+--command ("clip",s)    = ("", s)
+command ("compose",s) = trace "compose" ("", compose s) -- compose s
+command ("clip",s)    = trace "clip" ("", clip s) -- clip s
 
 -- A special command to reset the bucket
 command ("empty", s) = ("", resetBucket s)
@@ -114,7 +135,7 @@ command (x,s) = (x,s)
 
 -- Reset the state of a bucket(Clears colors/transparency)
 resetBucket :: State -> State
-resetBucket (p,d,m,_,_,b) = (p,d,m,((0,0,0),0),(opaque,0),b)
+resetBucket (p,d,m,_,_,b) = (p,d,m, ((0,0,0),0),(opaque,0),b)
 
 -- Rotates a direction clockwise or counterclockwise
 cwDir :: Dir -> Dir
@@ -195,7 +216,7 @@ addBitmap (p, d, m, c, t, (b,bc)) | bc >=10 = (p, d, m, c, t, (b,bc))
                                   | otherwise = (p, d, m, c, t, ((clearArray (last b)):(init b), bc+1))
 
 clearArray :: Bitmap -> Bitmap
-clearArray b = b // [((x,y),(black,transparent)) | x<-[0..599],y<-[0..599]]
+clearArray (!b) = b // [((x,y),packColor (black,transparent)) | x<-[0..599],y<-[0..599]]
 
 {- Uses the current known state, generate a proper "line" command with the
  - correct coordinates and color value
@@ -209,11 +230,11 @@ makeFill (p,_,_,c,t,_) = "fill at " ++ (show p) ++ "; " ++ (strColor c t)
 
 {- Draws a line from p1 to p2 -}
 drawLine :: State->State
-drawLine (p1,d,p2,c,t,((b:bs),bc)) = (p1,d,p2,c,t,((renderLine b (getColor c,getTrans t) p1 p2):bs,bc))
+drawLine (p1,d,p2,c,t,((b:bs),bc)) = (p1,d,p2,c,t,((renderLine b (packColor (getColor c,getTrans t)) p1 p2):bs,bc))
 
 {- Draw the actual line onto the bitmap -}
-renderLine :: Bitmap->Pixel->Pos->Pos->Bitmap
-renderLine b p (x1,y1) (x2,y2) = newB
+renderLine :: Bitmap->Int32->Pos->Pos->Bitmap
+renderLine (!b) p (x1,y1) (x2,y2) = newB
   where
      newB = b//(findLineCoords (dx,dy) (x,y) d d p [((x2,y2),p)])
        where
@@ -228,17 +249,18 @@ renderLine b p (x1,y1) (x2,y2) = newB
         x  = x1 * d + z
         y  = y1 * d + z
 
-findLineCoords :: Pos->Pos->Int->Int->Pixel->[(Pos,Pixel)]->[(Pos,Pixel)]
+findLineCoords :: Pos->Pos->Int->Int->Int32->[(Pos,Int32)]->[(Pos,Int32)]
 findLineCoords dxy     xy    d 0  p l = l
 findLineCoords (dx,dy) (x,y) d d2 p l = findLineCoords (dx,dy) ((x+dx),(y+dy)) d (d2-1) p ((((f (x `div` d)),(f (y `div` d))),p):l)
-    where f = floor . fromIntegral
+    where
+      f = floor . fromIntegral
 
 
 doFill :: State->State
 doFill (p1, d, m, c, t, ((b:bs),bc)) = (p1, d, m, c, t, ((floodFill b (getColor c,getTrans t) p1):bs, bc))
 
 floodFill :: Bitmap->Pixel->Pos->Bitmap
-floodFill b p (x,y) = newB
+floodFill (!b) p (x,y) = newB
   where
     newB = b -- TODO: make this actually do a flood fill
 
@@ -248,12 +270,12 @@ compose (p, d, m, c, t, b) = (p, d, m, c, t, b)
 
 {- Takes in two bitmaps, and composes one onto another, returning the resulting bitmap -}
 composeBitmap :: Bitmap->Bitmap->Bitmap
-composeBitmap b1 b2 = newB
+composeBitmap (!b1) (!b2) = newB
   where
-    newB = b1 // [(p, composeHelper (b1!p) (b2!p)) | x<-[0..599],y<-[0..599],let p=(x,y)]
+    newB = b1 // [(p, composeHelper (b1!p) (b2!p)) | x<-[0..599],y<-[0..599],let p=(x,y),(b1!p) /= (b2!p)]
 
-composeHelper:: Pixel->Pixel->Pixel
-composeHelper ((r0,g0,b0),a0) ((r1,g1,b1),a1) =
+composeHelper:: Int32->Int32->Int32
+composeHelper p0 p1 = packColor
     (
       (
         r0 + (r1 * (255 - a0) `div` 255),
@@ -262,6 +284,9 @@ composeHelper ((r0,g0,b0),a0) ((r1,g1,b1),a1) =
       ),
       a0 + (a1 * (255 - a0) `div` 255)
     )
+      where
+        ((r0,g0,b0),a0) = unpackColor p0
+        ((r1,g1,b1),a1) = unpackColor p1
 
 clip :: State->State
 clip (p, d, m, c, t, ((b1:b2:bs),bc)) = (p, d, m, c, t, (((clipBitmap b1 b2):bs) ++ b2:[], bc-1))
@@ -269,12 +294,12 @@ clip (p, d, m, c, t, b) = (p, d, m, c, t, b)
 
 {- Takes in two bitmaps, and clips one onto another, returning the resulting bitmap -}
 clipBitmap :: Bitmap->Bitmap->Bitmap
-clipBitmap b1 b2 = newB
+clipBitmap (!b1) (!b2) = newB
   where
-    newB = b1 // [(p, clipHelper (b1!p) (b2!p)) | x<-[0..599],y<-[0..599],let p=(x,y)]
+    newB = b1 // [(p, clipHelper (b1!p) (b2!p)) | x<-[0..599],y<-[0..599],let p=(x,y),(b1!p) /= (b2!p)]
 
-clipHelper :: Pixel->Pixel->Pixel
-clipHelper ((r0,g0,b0),a0) ((r1,g1,b1),a1) =
+clipHelper :: Int32->Int32->Int32
+clipHelper p0 p1 = packColor
     (
       (
         r1 * (a0 `div` 255),
@@ -283,6 +308,9 @@ clipHelper ((r0,g0,b0),a0) ((r1,g1,b1),a1) =
       ),
       a1 * (a0 `div` 255)
     )
+      where
+        ((r0,g0,b0),a0) = unpackColor p0
+        ((r1,g1,b1),a1) = unpackColor p1
 
 {- Converts the first bitmap into the a string in the imagemagick format -}
 dumpImage :: State->[String]
@@ -293,5 +321,5 @@ bitmapToString bitmap = [
         (printf "%d,%d: (%d, %d, %d, %d)" x y r g b a) |
             x<-[0..599],
             y<-[0..599],
-            let ((r,g,b),a) = bitmap!(x,y)
+            let ((r,g,b),a) = unpackColor (bitmap!(x,y))
         ]
