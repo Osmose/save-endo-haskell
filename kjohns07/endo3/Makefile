@@ -12,16 +12,17 @@ all:
 	ghc --make -O2 $(GHCOPTS) -o endo3 $(ENDO3)
 
 # Test them
-test: all
-	time ./endo1 < $(TESTFILE) > rna.inter
+test: all rna.inter
 	time ./endo3 < rna.inter > rna.final
-	rm rna.inter
 	convert TXT:- -alpha On +adjoin PNG32:image_alphaOn.png < rna.final
 	convert TXT:- -alpha Off +adjoin PNG32:image_alphaOff.png < rna.final
 
-profile: all
-	time ./endo3 +RTS -p -hd < rna.inter > rna.final
-	hp2ps -e8in endo3.hp
+profile: all rna.inter
+	time ./endo3 +RTS -K100M -p -hy < rna.inter > rna.final
+	hp2ps -e8in -c endo3.hp
+
+rna.inter: all
+	./endo1 < $(TESTFILE) > rna.inter
 
 images:
 	convert TXT:- -alpha On +adjoin PNG32:image_alphaOn.png < rna.final
