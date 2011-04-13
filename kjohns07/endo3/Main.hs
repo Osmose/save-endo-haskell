@@ -275,21 +275,20 @@ composeBitmap b1 b2 = b1 // uplist
   where
     uplist = [(p, composeHelper (b1!p) (b2!p)) | p<-(indices b1)]
 
--- TODO make not slow
 composeHelper:: Int32->Int32->Int32
 composeHelper (!p0) (!p1) = packColor
     (
       (
-        r0 + (r1 * mult),
-        g0 + (g1 * mult),
-        b0 + (b1 * mult)
+        r0 + floor (fromIntegral r1 * mult),
+        g0 + floor (fromIntegral g1 * mult),
+        b0 + floor (fromIntegral b1 * mult)
       ),
-      a0 + (a1 * mult)
+      a0 + floor (fromIntegral a1 * mult)
     )
       where
         ((r0,g0,b0),a0) = unpackColor p0
         ((r1,g1,b1),a1) = unpackColor p1
-        mult = floor ((255 - (fromIntegral a0)) / 255)
+        mult = ((255 - (fromIntegral a0)) / 255)
 
 clip :: State->State
 clip (p, d, m, c, t, (b1:b2:bs)) = (p, d, m, c, t, (clipBitmap b1 b2):bs)
@@ -301,23 +300,20 @@ clipBitmap b1 b2 = b1 // uplist
   where
     uplist = [(p, clipHelper (b1!p) (b2!p)) | p<-(indices b1)]
 
-strictList [] = []
-strictList (x:xs) = x `seq` (x:strictList xs)
-
 clipHelper :: Int32->Int32->Int32
 clipHelper p0 p1 = packColor
     (
       (
-        r1 * multplier,
-        g1 * multplier,
-        b1 * multplier
+        floor (fromIntegral r1 * multplier),
+        floor (fromIntegral g1 * multplier),
+        floor (fromIntegral b1 * multplier)
       ),
-      a1 * multplier
+      floor (fromIntegral a1 * multplier)
     )
       where
         ((r0,g0,b0),a0) = unpackColor p0
         ((r1,g1,b1),a1) = unpackColor p1
-        multplier = floor ((fromIntegral a0) / 255)
+        multplier = (fromIntegral a0) / 255
 
 {- Converts the first bitmap into the a string in the imagemagick format -}
 dumpImage :: State->[String]
