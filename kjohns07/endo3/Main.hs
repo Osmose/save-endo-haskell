@@ -255,14 +255,24 @@ findLineCoords (dx,dy) (x,y) d d2 p l = findLineCoords (dx,dy) ((x+dx),(y+dy)) d
     where
       f = floor . fromIntegral
 
+-- (Bitmap, pixel to replace, pixel to fill with)
+type FillState = (Bitmap, Int32, Int32)
 
 doFill :: State->State
-doFill (p1, d, m, c, t, (b:bs)) = (p1, d, m, c, t, (floodFill b (getColor c,getTrans t) p1):bs)
+doFill (pos, dir, mark, color_info, trans_info, (bmp:bmps)) = (pos, dir, mark, color_info, trans_info, newbmp:bmps)
+    where
+        (newbmp, _, _) = floodFill (bmp, bmp ! pos, packColor (getColor color_info, getTrans trans_info)) pos
 
-floodFill :: Bitmap->Pixel->Pos->Bitmap
-floodFill b p (x,y) = newB
+floodFill :: FillState->Pos->FillState
+floodFill ostate@(bmp, searchPixel, fill) pos
+  | inBounds pos && (bmp ! pos) /= searchPixel = (foldl floodFill (bmp // [(pos, fill)], searchPixel, fill) (generateBoxCoords pos))
+  | otherwise = ostate
   where
-    newB = b -- TODO: make this actually do a flood fill
+    generateBoxCoords (x, y) = [(x-1,y-1), (x,y-1), (x+1,y-1), (x-1,y), (x+1,y), (x-1,y+1), (x,y+1), (x+1,y+1)]
+    
+-- Checks if the given position is within the image bounds (0..599)
+inBounds :: Pos -> Bool
+inBounds (x,y) = x < 600 && y < 600 && x >= 0 && y >= 0
 
 compose :: State->State
 --compose (p, d, m, c, t, (b1:b2:bs)) = (p, d, m, c, t, b1:bs)
