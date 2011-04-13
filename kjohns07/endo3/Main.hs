@@ -277,8 +277,7 @@ composeBitmap b1 b2 = b1 // uplist
 
 -- TODO make not slow
 composeHelper:: Int32->Int32->Int32
-composeHelper p0 _ = p0
-composeHelper p0 p1 = packColor
+composeHelper (!p0) (!p1) = packColor
     (
       (
         r0 + (r1 * mult),
@@ -290,7 +289,7 @@ composeHelper p0 p1 = packColor
       where
         ((r0,g0,b0),a0) = unpackColor p0
         ((r1,g1,b1),a1) = unpackColor p1
-        mult = (255 - a0) `div` 255
+        mult = floor ((255 - (fromIntegral a0)) / 255)
 
 clip :: State->State
 clip (p, d, m, c, t, (b1:b2:bs)) = (p, d, m, c, t, (clipBitmap b1 b2):bs)
@@ -318,7 +317,7 @@ clipHelper p0 p1 = packColor
       where
         ((r0,g0,b0),a0) = unpackColor p0
         ((r1,g1,b1),a1) = unpackColor p1
-        multplier = (a0 `div` 255)
+        multplier = floor ((fromIntegral a0) / 255)
 
 {- Converts the first bitmap into the a string in the imagemagick format -}
 dumpImage :: State->[String]
