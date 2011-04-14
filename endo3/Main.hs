@@ -13,7 +13,6 @@ import Text.Printf
 import Data.Array.Diff
 import Data.Int
 import Data.Bits
-import Debug.Trace
 import Data.List
 
 
@@ -209,6 +208,21 @@ getTrans :: (Transparency,Int)->Transparency
 getTrans (a,0)  = a
 getTrans (a,lt) = div a lt
 
+getPackedColor :: (Color,Int)->(Transparency,Int)->Int32
+getPackedColor color_info trans_info = packColor
+    (
+      (
+        floor ((fromIntegral r) * mult),
+        floor ((fromIntegral g) * mult),
+        floor ((fromIntegral b) * mult)
+      ),
+      a
+    )
+      where
+        (r,g,b) = getColor color_info
+        a = getTrans trans_info
+        mult = (fromIntegral a) / 255
+
 {-
   Adds a new bitmap to the list of bitmaps if there is room
 -}
@@ -231,7 +245,7 @@ makeFill (p,_,_,c,t,_) = "fill at " ++ (show p) ++ "; " ++ (strColor c t)
 
 {- Draws a line from p1 to p2 -}
 drawLine :: State->State
-drawLine (p1,d,p2,c,t,(b:bs)) = (p1,d,p2,c,t,(renderLine b (packColor (getColor c,getTrans t)) p1 p2):bs)
+drawLine (p1,d,p2,c,t,(b:bs)) = (p1,d,p2,c,t,(renderLine b (getPackedColor c t) p1 p2):bs)
 
 {- Draw the actual line onto the bitmap -}
 renderLine :: Bitmap->Int32->Pos->Pos->Bitmap
@@ -245,19 +259,17 @@ renderLine b p (x1,y1) (x2,y2) = newB
         c = if dx*dy <= 0
             then 1
             else 0
-        z  = f ((d-c) `div` 2)
-            where f = floor . fromIntegral
+        z  =  floor (((fromIntegral d) - (fromIntegral c)) / 2)
         x  = x1 * d + z
         y  = y1 * d + z
 
 findLineCoords :: Pos->Pos->Int->Int->Int32->[(Pos,Int32)]->[(Pos,Int32)]
 findLineCoords dxy     xy    d 0  p l = l
-findLineCoords (dx,dy) (x,y) d d2 p l = findLineCoords (dx,dy) ((x+dx),(y+dy)) d (d2-1) p ((((f (x `div` d)),(f (y `div` d))),p):l)
+findLineCoords (dx,dy) (x,y) d d2 p l = findLineCoords (dx,dy) ((x+dx),(y+dy)) d (d2-1) p (cpixel:l)
     where
-      f = floor . fromIntegral
-
--- (Bitmap, pixel to replace, pixel to fill with)
-type FillState = (Bitmap, Int32, Int32)
+      xd = floor ((fromIntegral x) / (fromIntegral d))
+      yd = floor ((fromIntegral y) / (fromIntegral d))
+      cpixel = ((xd,yd),p)
 
 doFill :: State->State
 doFill (pos, dir, mark, color_info, trans_info, (bmp:bmps)) = (pos, dir, mark, color_info, trans_info, newbmp:bmps)
@@ -267,7 +279,7 @@ doFill (pos, dir, mark, color_info, trans_info, (bmp:bmps)) = (pos, dir, mark, c
             floodFill pos fillColor search bmp
           else
             bmp
-        fillColor = packColor (getColor color_info, getTrans trans_info)
+        fillColor = getPackedColor color_info trans_info
         search = bmp!pos
 
 floodFill :: Pos->Int32->Int32->Bitmap->Bitmap
@@ -276,13 +288,11 @@ floodFill p@(x,y) fpx spx b
   | b!p /= spx                      = b -- Stop if current pixel != search pixel
   | otherwise = ret
   where
-  -- foldl' floodFill (b//[(p,fpx)], spx, fpx) (mkCoords p)
     ret = floodFill (x+1,y) fpx spx $
           floodFill (x-1,y) fpx spx $
           floodFill (x,y+1) fpx spx $
           floodFill (x,y-1) fpx spx (b//[(p,fpx)])
 
-mkCoords (x,y) = [(x,y-1), (x-1,y), (x+1,y), (x,y+1)]
 
 
 -- Checks if the given position is within the image bounds (0..599)
@@ -304,11 +314,11 @@ composeHelper:: Int32->Int32->Int32
 composeHelper (!p0) (!p1) = packColor
     (
       (
-        r0 + floor (fromIntegral r1 * mult),
-        g0 + floor (fromIntegral g1 * mult),
-        b0 + floor (fromIntegral b1 * mult)
+        r0 + floor ((fromIntegral r1) * mult),
+        g0 + floor ((fromIntegral g1) * mult),
+        b0 + floor ((fromIntegral b1) * mult)
       ),
-      a0 + floor (fromIntegral a1 * mult)
+      a0 + floor ((fromIntegral a1) * mult)
     )
       where
         ((r0,g0,b0),a0) = unpackColor p0
@@ -329,16 +339,16 @@ clipHelper :: Int32->Int32->Int32
 clipHelper p0 p1 = packColor
     (
       (
-        floor (fromIntegral r1 * multplier),
-        floor (fromIntegral g1 * multplier),
-        floor (fromIntegral b1 * multplier)
+        floor ((fromIntegral r1) * mult),
+        floor ((fromIntegral g1) * mult),
+        floor ((fromIntegral b1) * mult)
       ),
-      floor (fromIntegral a1 * multplier)
+      floor ((fromIntegral a1) * mult)
     )
       where
         ((r0,g0,b0),a0) = unpackColor p0
         ((r1,g1,b1),a1) = unpackColor p1
-        multplier = (fromIntegral a0) / 255
+        mult = (fromIntegral a0) / 255
 
 {- Converts the first bitmap into the a string in the imagemagick format -}
 dumpImage :: State->[String]
