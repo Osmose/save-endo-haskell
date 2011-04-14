@@ -14,6 +14,7 @@ import Data.Array.Diff
 import Data.Int
 import Data.Bits
 import Debug.Trace
+import Data.List
 
 
 main :: IO()
@@ -261,19 +262,32 @@ type FillState = (Bitmap, Int32, Int32)
 doFill :: State->State
 doFill (pos, dir, mark, color_info, trans_info, (bmp:bmps)) = (pos, dir, mark, color_info, trans_info, newbmp:bmps)
     where
-        (newbmp, _, _) = floodFill (bmp, bmp ! pos, packColor (getColor color_info, getTrans trans_info)) pos
+        newbmp = if search /= fillColor
+          then
+            floodFill pos fillColor search bmp
+          else
+            bmp
+        fillColor = packColor (getColor color_info, getTrans trans_info)
+        search = bmp!pos
 
-floodFill :: FillState->Pos->FillState
-floodFill ostate@(bmp, searchPixel, fill) pos
-  | searchPixel == fill = ostate
-  | inBounds pos && (bmp ! pos) == searchPixel = (foldl floodFill (bmp // [(pos, fill)], searchPixel, fill) (generateBoxCoords pos))
-  | otherwise = ostate
+floodFill :: Pos->Int32->Int32->Bitmap->Bitmap
+floodFill p@(x,y) fpx spx b
+  | x<0 || y<0 || x>=600 || y>=600  = b -- Stop if out of bounds
+  | b!p /= spx                      = b -- Stop if current pixel != search pixel
+  | otherwise = ret
   where
-    generateBoxCoords (x, y) = [(x,y-1), (x-1,y), (x+1,y), (x,y+1)]
-    
+  -- foldl' floodFill (b//[(p,fpx)], spx, fpx) (mkCoords p)
+    ret = floodFill (x+1,y) fpx spx $
+          floodFill (x-1,y) fpx spx $
+          floodFill (x,y+1) fpx spx $
+          floodFill (x,y-1) fpx spx (b//[(p,fpx)])
+
+mkCoords (x,y) = [(x,y-1), (x-1,y), (x+1,y), (x,y+1)]
+
+
 -- Checks if the given position is within the image bounds (0..599)
 inBounds :: Pos -> Bool
-inBounds (x,y) = x < 600 && y < 600 && x >= 0 && y >= 0
+inBounds (x,y) = x < 100 && y < 100 && x >= 0 && y >= 0
 
 compose :: State->State
 --compose (p, d, m, c, t, (b1:b2:bs)) = (p, d, m, c, t, b1:bs)
