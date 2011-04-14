@@ -1,5 +1,5 @@
 # Various files used by the compilation process
-TESTFILE=../../data/null.rna
+TESTFILE=data/null.rna
 ENDO1=Endo1.hs
 ENDO3=Main.hs
 
