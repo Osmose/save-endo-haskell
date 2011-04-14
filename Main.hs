@@ -265,10 +265,11 @@ doFill (pos, dir, mark, color_info, trans_info, (bmp:bmps)) = (pos, dir, mark, c
 
 floodFill :: FillState->Pos->FillState
 floodFill ostate@(bmp, searchPixel, fill) pos
-  | inBounds pos && (bmp ! pos) /= searchPixel = (foldl floodFill (bmp // [(pos, fill)], searchPixel, fill) (generateBoxCoords pos))
+  | searchPixel == fill = ostate
+  | inBounds pos && (bmp ! pos) == searchPixel = (foldl floodFill (bmp // [(pos, fill)], searchPixel, fill) (generateBoxCoords pos))
   | otherwise = ostate
   where
-    generateBoxCoords (x, y) = [(x-1,y-1), (x,y-1), (x+1,y-1), (x-1,y), (x+1,y), (x-1,y+1), (x,y+1), (x+1,y+1)]
+    generateBoxCoords (x, y) = [(x,y-1), (x-1,y), (x+1,y), (x,y+1)]
     
 -- Checks if the given position is within the image bounds (0..599)
 inBounds :: Pos -> Bool
