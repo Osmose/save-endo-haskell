@@ -14,6 +14,7 @@ import Data.Array.Diff
 import Data.Int
 import Data.Bits
 import Data.List
+import Debug.Trace
 
 
 main :: IO()
@@ -122,9 +123,9 @@ command ("fill", s)  = (makeFill s, doFill s)
 
 command ("add", s)    = ("", addBitmap s)
 command ("compose",s) = ("", s)
-command ("clip",s)    = ("", s)
+--command ("clip",s)    = ("", s)
 --command ("compose",s) = trace "compose" ("", compose s) -- compose s
---command ("clip",s)    = trace "clip" ("", clip s) -- clip s
+command ("clip",s)    = trace "clip" ("", clip s) -- clip s
 
 -- A special command to reset the bucket
 command ("empty", s) = ("", resetBucket s)
@@ -331,9 +332,9 @@ clip s = s
 
 {- Takes in two bitmaps, and clips one onto another, returning the resulting bitmap -}
 clipBitmap :: Bitmap->Bitmap->Bitmap
-clipBitmap b1 b2 = b1 // uplist
+clipBitmap b1 b2 = uplist
   where
-    uplist = [(p, clipHelper (b1!p) (b2!p)) | p<-(indices b1)]
+    uplist = array ((0,0),(599,599)) [(p, clipHelper (b1!p) (b2!p)) | p<-(indices b1)]
 
 clipHelper :: Int32->Int32->Int32
 clipHelper p0 p1 = packColor
