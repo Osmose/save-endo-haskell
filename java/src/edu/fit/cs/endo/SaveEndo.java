@@ -1,11 +1,13 @@
 package edu.fit.cs.endo;
 import java.awt.BorderLayout;
+import java.awt.FileDialog;
 import java.awt.Point;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.LinkedList;
@@ -16,16 +18,17 @@ import java.util.TimerTask;
 
 import javax.imageio.ImageIO;
 import javax.swing.BoxLayout;
-import javax.swing.JApplet;
 import javax.swing.JButton;
+import javax.swing.JFrame;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
+import javax.swing.WindowConstants;
 
 @SuppressWarnings("serial")
-public class SaveEndo extends JApplet implements ActionListener {
+public class SaveEndo extends JFrame implements ActionListener {
 	// Endo State
 	private Point pos;
 	private GCLDirection dir;
@@ -41,8 +44,13 @@ public class SaveEndo extends JApplet implements ActionListener {
 	private Timer executeTimer = new Timer();
 	private JPanel bottomPanel;
 	private JProgressBar progress;
+	private FileDialog fd;
 	
 	public SaveEndo() {
+		setSize(600, 700);
+		setTitle("Save Endo!");
+		setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+		
 		initMenu();
 		initGUI();
 	}
@@ -55,19 +63,17 @@ public class SaveEndo extends JApplet implements ActionListener {
 		fileMenu.setMnemonic(KeyEvent.VK_F);
 		menuBar.add(fileMenu);
 		
-		JMenuItem selftest = new JMenuItem("Self-Test");
+		JMenuItem selftest = new JMenuItem("Open");
 		selftest.addActionListener(this);
 		fileMenu.add(selftest);
-		
-		JMenuItem runendo = new JMenuItem("Run Endo");
-		runendo.addActionListener(this);
-		fileMenu.add(runendo);
 	}
 	
 	private void initGUI() {
 		screen = new EndoScreen();
 		add(screen, BorderLayout.CENTER);
 	
+		fd = new FileDialog(this, "Choose an RNA file", FileDialog.LOAD);
+		
 		JPanel buttons = new JPanel();
 		
 		JButton playButton = new JButton("Play");
@@ -114,12 +120,16 @@ public class SaveEndo extends JApplet implements ActionListener {
 		try {
 			remove(bottomPanel);
 			
-			InputStream is = getClass().getResourceAsStream(file);
+			InputStream is = new FileInputStream(file);
 			byte[] data = new byte[7];
 			cmds = new LinkedList<GCLCommand>();
 			
+			GCLCommand cmd;
 			while (is.read(data) != -1) {
-				cmds.add(GCLCommand.strToCommand(new String(data)));
+				cmd = GCLCommand.strToCommand(new String(data));
+				if (cmd != GCLCommand.UNKNOWN) {
+					cmds.add(cmd);
+				}
 			}
 			is.close();
 			
@@ -310,29 +320,6 @@ public class SaveEndo extends JApplet implements ActionListener {
 		}
 	}
 	
-	public void actionPerformed(ActionEvent e) {
-		if (e.getActionCommand().equals("Self-Test")) {
-			openFile("/data/self.rna");
-		} else if (e.getActionCommand().equals("Run Endo")) {
-			openFile("/data/null.rna");
-		} else if (e.getActionCommand().equals("next")) {
-			executeToChange();
-		} else if (e.getActionCommand().equals("finish")) {
-			executeToEnd();
-		} else if (e.getActionCommand().equals("reset")) {
-			reset();
-			cmds.clear();
-			cmds.addAll(cmdsBackup);
-			screen.setImg(bitmaps.peek().toBufferedImage());
-		} else if (e.getActionCommand().equals("play")) {
-			startExecuteTimer(100);
-		} else if (e.getActionCommand().equals("playfast")) {
-			startExecuteTimer(8);
-		} else if (e.getActionCommand().equals("stop")) {
-			stopExecuteTimer();
-		}
-	}
-	
 	private void startExecuteTimer(int delay) {
 		executeTimer = new Timer();
 		executeTimer.schedule(new TimerTask() {
@@ -364,7 +351,39 @@ public class SaveEndo extends JApplet implements ActionListener {
 		
 		return sb.toString();
 	}
+	
+	public void actionPerformed(ActionEvent e) {
+		if (e.getActionCommand().equals("Open")) {
+			fd.setVisible(true);
 
+			String file = fd.getFile();
+			String dir = fd.getDirectory();
+
+			if (file != null) {
+				if (dir != null) {
+					file = dir.concat(file);
+				}
+				
+				openFile(file);
+			}
+		} else if (e.getActionCommand().equals("next")) {
+			executeToChange();
+		} else if (e.getActionCommand().equals("finish")) {
+			executeToEnd();
+		} else if (e.getActionCommand().equals("reset")) {
+			reset();
+			cmds.clear();
+			cmds.addAll(cmdsBackup);
+			screen.setImg(bitmaps.peek().toBufferedImage());
+		} else if (e.getActionCommand().equals("play")) {
+			startExecuteTimer(100);
+		} else if (e.getActionCommand().equals("playfast")) {
+			startExecuteTimer(8);
+		} else if (e.getActionCommand().equals("stop")) {
+			stopExecuteTimer();
+		}
+	}
+	
 	public static void main(String[] args) {
 		SaveEndo endo = new SaveEndo();
 		endo.setVisible(true);
