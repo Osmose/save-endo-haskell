@@ -1,14 +1,11 @@
 package edu.fit.cs.endo;
 import java.awt.BorderLayout;
-import java.awt.FileDialog;
-import java.awt.Frame;
 import java.awt.Point;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.LinkedList;
@@ -18,14 +15,16 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 import javax.imageio.ImageIO;
+import javax.swing.BoxLayout;
 import javax.swing.JApplet;
 import javax.swing.JButton;
-import javax.swing.JFrame;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JProgressBar;
 
+@SuppressWarnings("serial")
 public class SaveEndo extends JApplet implements ActionListener {
 	// Endo State
 	private Point pos;
@@ -38,23 +37,14 @@ public class SaveEndo extends JApplet implements ActionListener {
 	LinkedList<GCLCommand> cmds, cmdsBackup;
 	
 	// GUI Stuff
-	private FileDialog fd;
 	private EndoScreen screen;
 	private Timer executeTimer = new Timer();
-	private TimerTask executeTimerTask = new TimerTask() {
-		public void run() {
-			if (!cmds.isEmpty()) {
-				executeToChange();
-			}
-		}
-	};
+	private JPanel bottomPanel;
+	private JProgressBar progress;
 	
 	public SaveEndo() {
-		fd = new FileDialog(new Frame(), "Choose an RNA file", FileDialog.LOAD);
 		initMenu();
 		initGUI();
-		
-		setVisible(true);
 	}
 	
 	private void initMenu() {
@@ -110,16 +100,20 @@ public class SaveEndo extends JApplet implements ActionListener {
 		resetButton.addActionListener(this);
 		buttons.add(resetButton);
 		
-		JButton toggleBGButton = new JButton("Toggle BG");
-		toggleBGButton.setActionCommand("togglebg");
-		toggleBGButton.addActionListener(this);
-		buttons.add(toggleBGButton);
+		progress = new JProgressBar();
+		progress.setMinimum(0);
+		progress.setStringPainted(true);
 		
-		add(buttons, BorderLayout.SOUTH);
+		bottomPanel = new JPanel();
+		bottomPanel.setLayout(new BoxLayout(bottomPanel, BoxLayout.Y_AXIS));
+		bottomPanel.add(progress);
+		bottomPanel.add(buttons);
 	}
 	
 	private void openFile(String file) {
 		try {
+			remove(bottomPanel);
+			
 			InputStream is = getClass().getResourceAsStream(file);
 			byte[] data = new byte[7];
 			cmds = new LinkedList<GCLCommand>();
@@ -134,6 +128,12 @@ public class SaveEndo extends JApplet implements ActionListener {
 			
 			reset();
 			screen.setImg(bitmaps.peek().toBufferedImage());
+			
+			progress.setMaximum(cmds.size());
+			progress.setValue(0);
+			
+			add(bottomPanel, BorderLayout.SOUTH);
+			validate();
 		} catch (Exception err) {
 			System.out.println("Error reading file: " + file);
 			System.out.println(err.toString());
@@ -151,6 +151,7 @@ public class SaveEndo extends JApplet implements ActionListener {
 	}
 	
 	public boolean executeGCL(GCLCommand cmd) {
+		progress.setValue(progress.getValue() + 1);
 		switch (cmd) {
 			// Movement
 			case MOVE:	move(); return false;
@@ -324,14 +325,30 @@ public class SaveEndo extends JApplet implements ActionListener {
 			cmds.addAll(cmdsBackup);
 			screen.setImg(bitmaps.peek().toBufferedImage());
 		} else if (e.getActionCommand().equals("play")) {
-			executeTimer.schedule(executeTimerTask, 0, 100);
+			startExecuteTimer(100);
 		} else if (e.getActionCommand().equals("playfast")) {
-			executeTimer.schedule(executeTimerTask, 0, 10);
+			startExecuteTimer(8);
 		} else if (e.getActionCommand().equals("stop")) {
-			executeTimer.cancel();
-		} else if (e.getActionCommand().equals("togglebg")) {
-			screen.toggleBGColor();
+			stopExecuteTimer();
 		}
+	}
+	
+	private void startExecuteTimer(int delay) {
+		executeTimer = new Timer();
+		executeTimer.schedule(new TimerTask() {
+			public void run() {
+				if (!cmds.isEmpty()) {
+					executeToChange();
+				} else {
+					stopExecuteTimer();
+				}
+			}
+		}, 0, delay);
+	}
+	
+	private void stopExecuteTimer() {
+		executeTimer.cancel();
+		executeTimer = null;
 	}
 	
 	public String toString() {
@@ -350,5 +367,6 @@ public class SaveEndo extends JApplet implements ActionListener {
 
 	public static void main(String[] args) {
 		SaveEndo endo = new SaveEndo();
+		endo.setVisible(true);
 	}
 }
