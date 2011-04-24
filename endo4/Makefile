@@ -1,5 +1,5 @@
 # Various files used by the compilation process
-TESTFILE=../data/null.dna
+TESTFILE=../data/endo.dna.gz
 OUTFILE=final.rna
 SRC=Main.hs
 BIN=endo4
@@ -13,10 +13,10 @@ all:
 
 # Test them
 test: all
-	time ./$(BIN) < $(TESTFILE) > $(OUTFILE)
+	time zcat $(TESTFILE) | ./$(BIN) > $(OUTFILE)
 
 profile: all
-	time ./$(BIN) +RTS -K100M -p -hy < $(TESTFILE) > $(OUTFILE)
+	time zcat $(TESTFILE) | ./$(BIN) +RTS -K100M -p -hy > $(OUTFILE)
 	hp2ps -e8in -c $(BIN).hp
 
 clean:
