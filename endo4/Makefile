@@ -20,4 +20,4 @@ profile: all
 	hp2ps -e8in -c $(BIN).hp
 
 clean:
-	rm -f *.o *.hi *.out $(OUTFILE) $(BIN)
+	rm -f *.*~ *.o *.hi *.out $(OUTFILE) $(BIN)

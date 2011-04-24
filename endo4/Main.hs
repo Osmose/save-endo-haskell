@@ -108,7 +108,49 @@ data TItem = TBase String | Ref Int Int | RefLen Int deriving (Eq, Show)
 
 -- Decodes a template
 template :: GlobalState -> (GlobalState, Template)
-template (dna, rna) = ((dna, rna), [])
+template (dna, rna) = parseTemplate (dna,rna) []
+
+{-
+Testcases:(Copy/paste into GHCI)
+parseTemplate (Data.Sequence.fromList "CFPICIFCCPCFPIIPCCPIICII", Data.Sequence.empty) []
+((fromList "II",fromList ""),[TBase "I",TBase "C",TBase "F",TBase "P",Ref 1 3,RefLen 3])
+
+This code was essentially copied from parsePattern, so if you fix something here,
+fix it there as well.
+-}
+parseTemplate :: GlobalState->Template->(GlobalState,Template)
+parseTemplate (dna,rna) t
+    | d1 == 'C'  = parseTemplate (DS.drop  1 dna,rna) (t++(TBase "I"):[])
+    | d1 == 'F'  = parseTemplate (DS.drop  1 dna,rna) (t++(TBase "C"):[])
+    | d1 == 'P'  = parseTemplate (DS.drop  1 dna,rna) (t++(TBase "F"):[])
+    | d2 == cIC  = parseTemplate (DS.drop  2 dna,rna) (t++(TBase "P"):[])
+    | d2 == cIP  || d2 == cIF = let
+                                  (tdna, l) = nat (DS.drop 2 dna)
+                                  (ndna, n) = nat tdna
+                                in parseTemplate (ndna,rna) (t++(Ref n l):[])
+
+    | d3 == cIIP = let (ndna,n) = nat (DS.drop 3 dna)
+                   in parseTemplate (ndna, rna) (t++(RefLen n):[])
+    | d3 == cIII = parseTemplate (DS.drop 10 dna,rna><rnaAdd) t
+    | d3 == cIIC || d3 == cIIF =((DS.drop 3 dna, rna),t)
+    | otherwise = ((dna,rna),t) -- Need to indicate finish here...
+      where
+        d1 = DS.index dna 0
+        d2 = DS.take 2 dna
+        d3 = DS.take 3 dna
+
+        -- For the command III, gets the 7 characters that would be inserted
+        rnaAdd = (DS.take 7 (DS.drop 3 dna))
+
+        -- Silly constants
+        cIC  = DS.fromList "IC"
+        cIP  = DS.fromList "IP"
+        cIF  = DS.fromList "IF"
+        cIIP = DS.fromList "IIP"
+        cIIC = DS.fromList "IIC"
+        cIIF = DS.fromList "IIF"
+        cIII = DS.fromList "III"
+
 
 
 -- Pattern Matching
