@@ -165,15 +165,18 @@ matchreplace gs pat temp = mr (0,[],[]) pat temp gs
 type MRState = (Int,Environment, [Int])
 mr :: MRState->Pattern->Template->GlobalState->GlobalState
 mr (i,e,c) []      t gs@(dna,rna) = replace t e ((DS.drop i dna),rna) DS.empty
-mr (i,e,c) (p:pat) t gs@(dna,rna) = if (i< DS.length dna) then handlePat p else gs
+mr (i,e,c) (p:pat) t gs@(dna,rna) = handlePat p
     where
-        handlePat (PBase b)  = if (DS.index dna i == b) then mr(i+1,e,c) pat t gs
-                               else gs
-        handlePat (Skip n)   = if (i+n > DS.length dna) then gs
-                               else mr (i+n,e,c) pat t gs
-        handlePat (Search s) = let x = i + findPos s (DS.drop i dna) in
-                                 if x<i then gs
-                                 else mr (x,e,c) pat t gs
+        handlePat (PBase b) | i>=DS.length dna = gs
+                            | otherwise = if (DS.index dna i == b) then mr(i+1,e,c) pat t gs
+                                          else gs
+        handlePat (Skip n)  | i>=DS.length dna = gs
+                            | otherwise = if (i+n > DS.length dna) then gs
+                                          else mr (i+n,e,c) pat t gs
+        handlePat (Search s)  | i>=DS.length dna = gs
+                              | otherwise = let x = i + findPos s (DS.drop i dna) in
+                                              if x<i then gs
+                                              else mr (x,e,c) pat t gs
         handlePat (Open)     = mr (i,e,i:c) pat t gs
         handlePat (Close)    = let
                                  (cc:nc) = c
