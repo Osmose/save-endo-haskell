@@ -64,7 +64,7 @@ parsePattern (Data.Sequence.fromList "IIPIFCCFPICIICIIF", Data.Sequence.empty) 0
 -}
 parsePattern :: GlobalState->Int->Pattern->(GlobalState,Pattern)
 parsePattern (dna,rna) lvl p
-    | DS.null dna = ((dna,rna),p) -- TODO: set finish flag
+    | DS.null dna = ((dna,rna),[])
     | d1 == 'C'  = parsePattern (DS.drop  1 dna,rna) lvl (p++(PBase 'I'):[])
     | d1 == 'F'  = parsePattern (DS.drop  1 dna,rna) lvl (p++(PBase 'C'):[])
     | d1 == 'P'  = parsePattern (DS.drop  1 dna,rna) lvl (p++(PBase 'F'):[])
@@ -123,7 +123,7 @@ fix it there as well.
 -}
 parseTemplate :: GlobalState->Template->(GlobalState,Template)
 parseTemplate (dna,rna) t
-    | DS.null dna = ((dna,rna),t) -- TODO: set finish flag
+    | DS.null dna = ((dna,rna),[])
     | d1 == 'C'  = parseTemplate (DS.drop  1 dna,rna) (t++(TBase 'I'):[])
     | d1 == 'F'  = parseTemplate (DS.drop  1 dna,rna) (t++(TBase 'C'):[])
     | d1 == 'P'  = parseTemplate (DS.drop  1 dna,rna) (t++(TBase 'F'):[])
@@ -137,7 +137,7 @@ parseTemplate (dna,rna) t
                    in parseTemplate (ndna, rna) (t++(RefLen n):[])
     | d3 == cIII = parseTemplate (DS.drop 10 dna,rna><rnaAdd) t
     | d3 == cIIC || d3 == cIIF =((DS.drop 3 dna, rna),t)
-    | otherwise = ((dna,rna),t) -- TODO: set finish flag here
+    | otherwise = ((dna,rna),[])
       where
         d1 = DS.index dna 0
         d2 = DS.take 2 dna
@@ -259,7 +259,7 @@ quote d
 -- Input:  DNA
 -- Output: (remaining dna, number)
 nat :: Seq Char -> (Seq Char,Int)
-nat s | DS.null s              = (DS.empty, 0)  -- TODO: set finish flag
+nat s | DS.null s              = (DS.empty, 0)
       | d1 == 'P'              = (DS.drop 1 s,0)
       | d1 == 'I' || d1 == 'F' = (dna,2 * n)
       | d1 == 'C'              = (dna,2 * n + 1)
