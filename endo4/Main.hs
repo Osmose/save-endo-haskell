@@ -76,7 +76,7 @@ parsePattern (dna,rna) lvl p
     | d3 == cIIC || d3 == cIIF =
         if lvl==0 then ((DS.drop 3 dna, rna),p)
         else      parsePattern (DS.drop  3 dna,rna) (lvl-1) (p++Close:[])
-    | otherwise = ((dna,rna),p) -- TODO: set finish flag
+    | otherwise = ((dna,rna),[])
       where
         d1 = DS.index dna 0
         d2 = DS.take 2 dna
