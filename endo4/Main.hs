@@ -161,6 +161,45 @@ matchreplace state pat temp = state
 
 -- Helper functions
 
+{- Testcases:(Copy/Paste into GHCI)
+asNat 5
+fromList "CICP"
+nat (asNat 134)
+(fromList "",134)
+-}
+asNat :: Int->Seq Char
+asNat n
+    | n == 0        = DS.fromList "P"
+    | n>0 && even n = 'I' <| asNat (n `div` 2)
+    | n>0 && odd n  = 'C' <| asNat (n `div` 2)
+
+{- Testcases:(Copy/Paste into GHCI)
+protect 1 (Data.Sequence.fromList "ICFP")
+fromList "CFPIC"
+protect 2 (Data.Sequence.fromList "ICFP")
+fromList "FPICCF"
+-}
+-- Takes in a count, string to protect, and global state
+protect :: Int->Seq Char->Seq Char
+protect 0 d = d
+protect l d = protect (l-1) (quote d)
+
+{- Testcases:(Copy/Paste into GHCI)
+quote (Data.Sequence.fromList "ICFP")
+fromList "CFPIC"
+-}
+-- Encodes a string
+quote :: Seq Char->Seq Char
+quote d
+    | DS.null d = DS.empty
+    | d1 == 'I' = 'C' <| quote (DS.drop 1 d)
+    | d1 == 'C' = 'F' <| quote (DS.drop 1 d)
+    | d1 == 'F' = 'P' <| quote (DS.drop 1 d)
+    | d1 == 'P' = 'I' <| 'C' <| quote (DS.drop 1 d)
+    | otherwise = DS.empty
+      where
+        d1 = DS.index d 0
+
 -- Consumes some DNA producing a number
 -- Input:  DNA
 -- Output: (remaining dna, number)
