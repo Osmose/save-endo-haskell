@@ -10,16 +10,20 @@ import Data.Either
 
 import Debug.Trace
 
+
+--trace :: String->a->a
+--trace _ a = a
+
 -- Main function
 main :: IO()
 main = interact( unlines . map parseInput . lines)
 
--- (DNA, RNA)
-type GlobalState = (Seq Char, Seq Char)
+-- (DNA, RNA, finished?)
+type GlobalState = (Seq Char, Seq Char, Bool)
 
 -- Passes the dna string to execute and prints out the resulting rna
 parseInput :: String -> String
-parseInput dna = trace "\n\n" $ toList $ execute (DS.fromList dna, DS.empty)
+parseInput dna = toList $ execute (DS.fromList dna, DS.empty, False)
 
 -- Executes a DNA string to produce an RNA string
 execute :: GlobalState -> Seq Char
@@ -29,14 +33,30 @@ execute state = either id execute result
 
 -- Runs through the execute loop once
 executeOnce :: GlobalState -> Either (Seq Char) GlobalState
-executeOnce state@(dna, rna)
+executeOnce state@(dna, rna, _)
+    | f1 == True || f2 == True = Left rna
     | pat == [] = Left rna
-    | temp == [] = Left rna
-    | otherwise = Right newState
+    | temp== [] = trace ("--" ++ prettyPattern pat) Left rna
+    | otherwise = trace ((prettyPattern pat) ++ "\n" ++ ((prettyTemplate temp)) ++ "\nlen(rna)   "++show (DS.length nrna `div` 7)++ "\nlen(ndna)  "++show (DS.length ndna)++ "\nlen(dna)   "++show (DS.length dna)++"\n") Right newState
     where
-        (pstate, pat) = trace (show $ pattern state) pattern state
-        (tstate, temp) = trace (show $ template pstate) template pstate
-        newState = trace (show $ matchreplace tstate pat temp) matchreplace tstate pat temp
+        (pstate@(_,_,f1), pat) = pattern state
+        (tstate@(_,_,f2), temp) = template pstate
+        newState@(ndna,nrna,_) = matchreplace tstate pat temp
+
+prettyTemplate :: Template->String
+prettyTemplate [] = []
+prettyTemplate ((TBase x):xs)  = x:prettyTemplate xs
+prettyTemplate ((Ref n 0):xs)  = "\\" ++ show n ++ prettyTemplate xs
+prettyTemplate ((Ref n l):xs)  = "\\(" ++ show n ++ "," ++ show l ++")" ++ prettyTemplate xs
+prettyTemplate ((RefLen l):xs) = "(rl:"++show l++")" ++ prettyTemplate xs
+
+prettyPattern :: Pattern->String
+prettyPattern [] = []
+prettyPattern ((PBase x):xs)  = x:prettyPattern xs
+prettyPattern ((Skip n):xs)  = "!" ++ show n ++ prettyPattern xs
+prettyPattern ((Search s):xs)  = "?" ++ show s ++"" ++ prettyPattern xs
+prettyPattern ((Open):xs) = "(" ++ prettyPattern xs
+prettyPattern ((Close):xs) = ")" ++ prettyPattern xs
 
 
 -- Patterns
@@ -45,7 +65,7 @@ data PItem = PBase Char | Skip Int | Search String | Open | Close deriving (Eq, 
 
 -- Decodes a pattern
 pattern :: GlobalState -> (GlobalState, Pattern)
-pattern (dna, rna) = parsePattern (dna,rna) 0 []
+pattern state = parsePattern state 0 []
 
 
 {-
@@ -63,20 +83,21 @@ parsePattern (Data.Sequence.fromList "IIPIFCCFPICIICIIF", Data.Sequence.empty) 0
 [Open,Search "ICFP",Close]
 -}
 parsePattern :: GlobalState->Int->Pattern->(GlobalState,Pattern)
-parsePattern (dna,rna) lvl p
-    | DS.null dna = ((dna,rna),[])
-    | d1 == 'C'  = parsePattern (DS.drop  1 dna,rna) lvl (p++(PBase 'I'):[])
-    | d1 == 'F'  = parsePattern (DS.drop  1 dna,rna) lvl (p++(PBase 'C'):[])
-    | d1 == 'P'  = parsePattern (DS.drop  1 dna,rna) lvl (p++(PBase 'F'):[])
-    | d2 == cIC  = parsePattern (DS.drop  2 dna,rna) lvl (p++(PBase 'P'):[])
-    | d2 == cIP  = patternNat   (DS.drop  2 dna,rna) lvl p
-    | d2 == cIF  = patternConst (DS.drop  3 dna,rna) lvl p
-    | d3 == cIIP = parsePattern (DS.drop  3 dna,rna) (lvl+1) (p++Open:[])
-    | d3 == cIII = parsePattern (DS.drop 10 dna,rna><rnaAdd) lvl p
+parsePattern (dna,rna,f) lvl p
+    | f == True   = ((dna,rna,True),[])
+    | DS.null dna = ((dna,rna,True),[])
+    | d1 == 'C'  = parsePattern (DS.drop  1 dna,rna, f) lvl (p++(PBase 'I'):[])
+    | d1 == 'F'  = parsePattern (DS.drop  1 dna,rna, f) lvl (p++(PBase 'C'):[])
+    | d1 == 'P'  = parsePattern (DS.drop  1 dna,rna, f) lvl (p++(PBase 'F'):[])
+    | d2 == cIC  = parsePattern (DS.drop  2 dna,rna, f) lvl (p++(PBase 'P'):[])
+    | d2 == cIP  = patternNat   (DS.drop  2 dna,rna, f) lvl p
+    | d2 == cIF  = patternConst (DS.drop  3 dna,rna, f) lvl p
+    | d3 == cIIP = parsePattern (DS.drop  3 dna,rna, f) (lvl+1) (p++Open:[])
+    | d3 == cIII = parsePattern (DS.drop 10 dna,rna><rnaAdd, f) lvl p
     | d3 == cIIC || d3 == cIIF =
-        if lvl==0 then ((DS.drop 3 dna, rna),p)
-        else      parsePattern (DS.drop  3 dna,rna) (lvl-1) (p++Close:[])
-    | otherwise = ((dna,rna),[])
+        if lvl==0 then ((DS.drop 3 dna, rna, f),p)
+        else      parsePattern (DS.drop  3 dna,rna, f) (lvl-1) (p++Close:[])
+    | otherwise = ((dna,rna,True),[])
       where
         d1 = DS.index dna 0
         d2 = DS.take 2 dna
@@ -95,13 +116,13 @@ parsePattern (dna,rna) lvl p
         cIII = DS.fromList "III"
 
 patternNat :: GlobalState->Int->Pattern->(GlobalState,Pattern)
-patternNat (dna,rna) lvl p = parsePattern (ndna,rna) lvl (p++(Skip n):[])
+patternNat (dna,rna,_) lvl p = parsePattern (ndna,rna,finished) lvl (p++(Skip n):[])
     where
-        (ndna,n) = nat dna
+        (ndna,n,finished) = nat dna
 
 -- If this isn't correct, then it should probably be "Search (reverse str)"
 patternConst :: GlobalState->Int->Pattern->(GlobalState,Pattern)
-patternConst (dna,rna) lvl p = parsePattern (ndna,rna) lvl (p++(Search str):[])
+patternConst (dna,rna,f) lvl p = parsePattern (ndna,rna,f) lvl (p++(Search str):[])
     where
         (ndna,str) = consts dna
 
@@ -111,7 +132,7 @@ data TItem = TBase Char | Ref Int Int | RefLen Int deriving (Eq, Show)
 
 -- Decodes a template
 template :: GlobalState -> (GlobalState, Template)
-template (dna, rna) = parseTemplate (dna,rna) []
+template (dna, rna, f) = parseTemplate (dna,rna, f) []
 
 {-
 Testcases:(Copy/paste into GHCI)
@@ -122,22 +143,26 @@ This code was essentially copied from parsePattern, so if you fix something here
 fix it there as well.
 -}
 parseTemplate :: GlobalState->Template->(GlobalState,Template)
-parseTemplate (dna,rna) t
-    | DS.null dna = ((dna,rna),[])
-    | d1 == 'C'  = parseTemplate (DS.drop  1 dna,rna) (t++(TBase 'I'):[])
-    | d1 == 'F'  = parseTemplate (DS.drop  1 dna,rna) (t++(TBase 'C'):[])
-    | d1 == 'P'  = parseTemplate (DS.drop  1 dna,rna) (t++(TBase 'F'):[])
-    | d2 == cIC  = parseTemplate (DS.drop  2 dna,rna) (t++(TBase 'P'):[])
+parseTemplate (dna,rna,f) t
+    | DS.null dna = ((dna,rna, True),[])
+    | d1 == 'C'  = parseTemplate (DS.drop  1 dna,rna,f) (t++(TBase 'I'):[])
+    | d1 == 'F'  = parseTemplate (DS.drop  1 dna,rna,f) (t++(TBase 'C'):[])
+    | d1 == 'P'  = parseTemplate (DS.drop  1 dna,rna,f) (t++(TBase 'F'):[])
+    | d2 == cIC  = parseTemplate (DS.drop  2 dna,rna,f) (t++(TBase 'P'):[])
     | d2 == cIP  || d2 == cIF = let
-                                  (tdna, l) = nat (DS.drop 2 dna)
-                                  (ndna, n) = nat tdna
-                                in parseTemplate (ndna,rna) (t++(Ref n l):[])
+                                  (tdna, l, f1) = nat (DS.drop 2 dna)
+                                  (ndna, n, f2) = nat tdna
+                                in
+                                  if (f1 == True || f2 == True) then ((dna,rna,True),[])
+                                  else parseTemplate (ndna,rna,f) (t++(Ref n l):[])
 
-    | d3 == cIIP = let (ndna,n) = nat (DS.drop 3 dna)
-                   in parseTemplate (ndna, rna) (t++(RefLen n):[])
-    | d3 == cIII = parseTemplate (DS.drop 10 dna,rna><rnaAdd) t
-    | d3 == cIIC || d3 == cIIF =((DS.drop 3 dna, rna),t)
-    | otherwise = ((dna,rna),[])
+    | d3 == cIIP = let (ndna,n,f) = nat (DS.drop 3 dna)
+                   in
+                     if (f==True) then ((dna,rna,True),[])
+                     else parseTemplate (ndna, rna, f) (t++(RefLen n):[])
+    | d3 == cIII = parseTemplate (DS.drop 10 dna,rna><rnaAdd, f) t
+    | d3 == cIIC || d3 == cIIF =((DS.drop 3 dna, rna, f),t)
+    | otherwise = ((dna,rna,True),[])
       where
         d1 = DS.index dna 0
         d2 = DS.take 2 dna
@@ -156,6 +181,10 @@ parseTemplate (dna,rna) t
         cIII = DS.fromList "III"
 
 
+prettyEnv :: Environment -> String
+prettyEnv [] = []
+prettyEnv (x:xs) = "\n   "++(toList (DS.take 10 x)) ++"... (" ++ show (DS.length x) ++ " bases)" ++ prettyEnv xs
+
 
 -- Pattern Matching
 matchreplace :: GlobalState -> Pattern -> Template -> GlobalState
@@ -164,8 +193,8 @@ matchreplace gs pat temp = mr (0,[],[]) pat temp gs
 -- current position, Environment, Marked open parens
 type MRState = (Int,Environment, [Int])
 mr :: MRState->Pattern->Template->GlobalState->GlobalState
-mr (i,e,c) []      t gs@(dna,rna) = replace t e ((DS.drop i dna),rna) DS.empty
-mr (i,e,c) (p:pat) t gs@(dna,rna) = handlePat p
+mr (i,e,c) []      t gs@(dna,rna,f) = trace ("  successful match of length " ++ show i ++ " " ++prettyEnv e) replace t e ((DS.drop i dna),rna,f) DS.empty
+mr (i,e,c) (p:pat) t gs@(dna,rna,f) = handlePat p
     where
         handlePat (PBase b) | i>=DS.length dna = gs
                             | otherwise = if (DS.index dna i == b) then mr(i+1,e,c) pat t gs
@@ -180,7 +209,7 @@ mr (i,e,c) (p:pat) t gs@(dna,rna) = handlePat p
         handlePat (Open)     = mr (i,e,i:c) pat t gs
         handlePat (Close)    = let
                                  (cc:nc) = c
-                                 ne = e++[DS.take i (DS.drop cc dna)]
+                                 ne = e++[DS.take (i-cc) (DS.drop cc dna)]
                                in mr (i,ne,nc) pat t gs
 
 -- Searches for string in sequence, returning the position of it if found
@@ -190,7 +219,7 @@ findPos needle haystack  = findHelper 0 needle haystack
 findHelper :: Int->String->Seq Char->Int
 findHelper i s dna
     | DS.null dna = (-1)
-    | DS.fromList s == DS.take (Prelude.length s) dna = i
+    | DS.fromList s == DS.take (Prelude.length s) dna = i+(Prelude.length s)
     | otherwise = findHelper (i+1) s (DS.drop 1 dna)
 
 
@@ -208,8 +237,8 @@ replace [TBase 'P',RefLen 0,Ref 0 1] [Data.Sequence.fromList "ICFP"] (Data.Seque
 -}
 -- Takes a template, environment, current string being built, globalstate, and transforms the dna
 replace :: Template->Environment->GlobalState->Seq Char->GlobalState
-replace []     e (dna,rna) r = (r >< dna, rna)
-replace (t:ts) e (dna,rna) r = replace ts e (dna,rna) (replaceItem t e r)
+replace []     e (dna,rna,f) r = (r >< dna, rna,f)
+replace (t:ts) e (dna,rna,f) r = replace ts e (dna,rna,f) (replaceItem t e r)
 
 -- Replaces a single template item, adding it to the replacement string
 replaceItem :: TItem->Environment->Seq Char->Seq Char
@@ -260,16 +289,16 @@ quote d
 
 -- Consumes some DNA producing a number
 -- Input:  DNA
--- Output: (remaining dna, number)
-nat :: Seq Char -> (Seq Char,Int)
-nat s | DS.null s              = (DS.empty, 0)
-      | d1 == 'P'              = (DS.drop 1 s,0)
-      | d1 == 'I' || d1 == 'F' = (dna,2 * n)
-      | d1 == 'C'              = (dna,2 * n + 1)
-      | otherwise              = (DS.drop 1 s,0)
+-- Output: (remaining dna, number, finished?)
+nat :: Seq Char -> (Seq Char,Int,Bool)
+nat s | DS.null s              = (DS.empty, 0,True)
+      | d1 == 'P'              = (DS.drop 1 s,0,False)
+      | d1 == 'I' || d1 == 'F' = (dna,2 * n,False)
+      | d1 == 'C'              = (dna,2 * n + 1,False)
+      | otherwise              = (DS.drop 1 s,0,False)
         where
           d1 = DS.index s 0
-          (dna,n) = nat (DS.drop 1 s)
+          (dna,n,f) = nat (DS.drop 1 s)
 -- Consumes some DNA to producing a search string
 -- Input:  DNA
 -- Output: (remaining dna,search string)
