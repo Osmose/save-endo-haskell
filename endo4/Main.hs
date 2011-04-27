@@ -8,11 +8,11 @@ import Data.Sequence as DS
 import Data.Foldable
 import Data.Either
 
-import Debug.Trace
+--import Debug.Trace
 
 
---trace :: String->a->a
---trace _ a = a
+trace :: String->a->a
+trace _ a = a
 
 -- Main function
 main :: IO()
@@ -23,21 +23,22 @@ type GlobalState = (Seq Char, Seq Char, Bool)
 
 -- Passes the dna string to execute and prints out the resulting rna
 parseInput :: String -> String
-parseInput dna = toList $ execute (DS.fromList dna, DS.empty, False)
+parseInput dna = toList $ executeOnce (DS.fromList dna, DS.empty, False)
 
 -- Executes a DNA string to produce an RNA string
-execute :: GlobalState -> Seq Char
+{-
+ - execute :: GlobalState -> Seq Char
 execute state = either id execute result
     where
         result = executeOnce state
-
+-}
 -- Runs through the execute loop once
-executeOnce :: GlobalState -> Either (Seq Char) GlobalState
+executeOnce :: GlobalState ->Seq Char
 executeOnce state@(dna, rna, _)
-    | f1 == True || f2 == True = Left rna
-    | pat == [] = Left rna
-    | temp== [] = trace ("--" ++ prettyPattern pat) Left rna
-    | otherwise = trace ((prettyPattern pat) ++ "\n" ++ ((prettyTemplate temp)) ++ "\nlen(rna)   "++show (DS.length nrna `div` 7)++ "\nlen(ndna)  "++show (DS.length ndna)++ "\nlen(dna)   "++show (DS.length dna)++"\n") Right newState
+    | f1 == True || f2 == True = rna
+    -- | pat == [] = Left rna
+    -- | temp== [] = trace ("--" ++ prettyPattern pat) Left rna
+    | otherwise = trace ((prettyPattern pat) ++ "\n" ++ ((prettyTemplate temp)) ++ "\nlen(rna)   "++show (DS.length nrna `div` 7)++ "\nlen(ndna)  "++show (DS.length ndna)++ "\nlen(dna)   "++show (DS.length dna)++"\n") (executeOnce newState)
     where
         (pstate@(_,_,f1), pat) = pattern state
         (tstate@(_,_,f2), temp) = template pstate
